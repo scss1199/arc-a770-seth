@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# User-local overrides — do NOT commit your personal bat
+launch/*.local.bat
+launch/*.private.bat
+
+# Logs that may contain personal prompts
+*.log
+sdnext.log
+params.txt
+
+# Backup files produced by SD.Next itself
+*_backup.json
+*.bak
+*.bak-*

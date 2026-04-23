@@ -46,12 +46,14 @@ Detailed rationale for every setting lives in [`docs/`](docs/):
 
 - [01 — Quick start](docs/01-quick-start.md)
 - [02 — Environment variables explained](docs/02-env-vars.md)
-- [03 — SD.Next UI settings](docs/03-sdnext-settings.md)
+- [03 — SD.Next UI settings (high-priority)](docs/03-sdnext-settings.md)
 - [04 — A770 hardware notes](docs/04-a770-hardware-notes.md)
 - [05 — Benchmarks](docs/05-benchmarks.md)
 - [06 — Pipeline tradeoffs (FP16 vs BF16, VAE upcast, etc.)](docs/06-pipeline-tradeoffs.md)
 - [07 — Troubleshooting (issues encountered in the wild)](docs/07-troubleshooting.md)
 - [08 — Detailer / Refiner decoupling patch](docs/08-detailer-refiner-fix.md)
+- [10 — SD.Next UI full parameter reference (exhaustive, per-page)](docs/10-sdnext-ui-full-reference.md)
+- [11 — Multi-stage prompt framework (six-block architecture)](docs/11-prompt-framework.md)
 
 ## Patches
 
@@ -96,7 +98,9 @@ Current patches:
 ## What this repo does NOT contain
 
 - Model recommendations (use whichever SDXL checkpoint you like)
-- Prompt examples (out of scope; personal taste)
+- Specific prompt examples (out of scope; personal taste) — **but** doc 11
+  documents the multi-stage prompt *architecture* (template / structure / rules)
+  agnostic to content
 - LoRA / embedding files
 - Output images
 

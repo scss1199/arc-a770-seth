@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.2 — 2026-04-23
+
+Two reference docs distilled from a private SD.Next settings spreadsheet the
+author had been maintaining alongside the year of tuning.
+
+### New
+
+- [`docs/10-sdnext-ui-full-reference.md`](docs/10-sdnext-ui-full-reference.md) —
+  **Exhaustive, page-by-page enumeration of every parameter** in SD.Next's
+  Settings UI (Model Loading, Offloading, Quantization, VAE, Text Encoder,
+  Compute, Backend, Pipeline Modifiers, Compile, Paths, Image Options, Live
+  Previews, Postprocessing, Huggingface, Networks, Extensions). Each parameter
+  is marked 🔴 critical / 🟡 recommended / ⚪ default-ok / 🟢 don't-touch.
+  Values reflect the author's **current live `config.json`** as of this
+  release (some tweaked over the course of tuning — see 03 / 06 for the
+  rationale trail).
+- [`docs/11-prompt-framework.md`](docs/11-prompt-framework.md) —
+  **Six-block multi-stage prompt architecture** (`mpp` / `mnp` / `rpp` / `rnp` /
+  `dpp` / `dnp`) for demanding composite SDXL pipelines. Formatting rules
+  (no-space-after-comma, `BREAK` adjacency, underscore-joined concepts,
+  broad-to-narrow ordering), example skeleton, common failure modes + fixes,
+  and relationship to the `Refiner start` setting that controls detailer
+  behavior.
+
+### Minor
+
+- README navigation updated to include docs 10 and 11.
+- Clarified that README's "Prompt examples out of scope" applies to specific
+  prompts — the *architecture* (doc 11) is documented.
+
 ## v1.1 — 2026-04-23
 
 Added `patches/` infrastructure and the first patch: a one-line fix that

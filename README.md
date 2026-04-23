@@ -51,6 +51,26 @@ Detailed rationale for every setting lives in [`docs/`](docs/):
 - [05 — Benchmarks](docs/05-benchmarks.md)
 - [06 — Pipeline tradeoffs (FP16 vs BF16, VAE upcast, etc.)](docs/06-pipeline-tradeoffs.md)
 - [07 — Troubleshooting (issues encountered in the wild)](docs/07-troubleshooting.md)
+- [08 — Detailer / Refiner decoupling patch](docs/08-detailer-refiner-fix.md)
+
+## Patches
+
+The `patches/` directory contains small, reviewed fixes to SD.Next that were
+discovered during long-run tuning on A770 and are not yet merged upstream.
+Each patch is a git-format unified diff with a full context header. Apply
+them against your SD.Next install with:
+
+```bash
+python tools/apply_patches.py --dry-run     # preview
+python tools/apply_patches.py               # apply with .orig backup
+python tools/apply_patches.py --revert      # restore backups
+```
+
+Current patches:
+
+| Patch | Target | Summary |
+|---|---|---|
+| `detailer-refiner-decouple.patch` | `modules/processing_diffusers.py` | Makes `Detailer strength` actually work by stopping it from inheriting `Refiner start`. See [doc 08](docs/08-detailer-refiner-fix.md). |
 
 ## Key findings in one page
 
@@ -128,6 +148,23 @@ A770 跑 AI 繪圖社群小、文件散，大部分指南都以 NVIDIA 為主。
 4. 執行。若閃退，從已開的 cmd 視窗手動跑以便看錯誤訊息
 
 詳細說明在 [`docs/`](docs/)，每個決定都附理由。
+
+### Patches（SD.Next 補丁）
+
+`patches/` 目錄收錄 A770 長跑中發現、尚未進上游的 SD.Next 小修補。每個都是完整
+git-format patch 附 context header。用法：
+
+```bash
+python tools/apply_patches.py --dry-run     # 預覽
+python tools/apply_patches.py               # 套用（自動 .orig 備份）
+python tools/apply_patches.py --revert      # 還原
+```
+
+目前的補丁：
+
+- `detailer-refiner-decouple.patch` — 修好 `Detailer strength` 這個長期失靈的
+  參數，原因是它意外繼承了 `Refiner start` 的 denoising schedule。詳見
+  [doc 08](docs/08-detailer-refiner-fix.md)。
 
 ### 不在本 repo 範圍的
 

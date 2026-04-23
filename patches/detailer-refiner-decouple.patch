@@ -1,0 +1,70 @@
+From: Seth Chou <scss1199@gmail.com>
+Subject: [PATCH] fix(detailer): decouple denoising schedule from refiner_start
+Target: SD.Next commit 0eb4a98e0 (2026-04-04) or later
+File: modules/processing_diffusers.py
+
+The detailer pass in SD.Next is implemented via `processing_diffusers.process_base`,
+the same entry point used by the refine pass. Both consume `p.refiner_start` to
+compute `denoising_start` / `denoising_end` kwargs passed to the diffusers
+StableDiffusionXLInpaintPipeline.
+
+This causes detailer to inherit the refiner's denoising schedule even though
+detailer is semantically a full-inpaint pass driven by its own `strength` +
+mask. Symptom: setting `Detailer strength = 1.0` does not yield a full repaint;
+instead the face region is only partially redrawn at whatever `refiner_start`
+the user has configured for the refine pass.
+
+Example from a production run (SD.Next commit 0eb4a98e0, Arc A770 + SDXL
+Illustrious + face-yolo8m detailer):
+
+  Refiner start UI slider: 0.75
+  Detailer strength UI slider: 1.0
+  -> pipeline receives: denoising_start=0.75, denoising_end=1, strength=1.0
+  -> effective behavior: face repainted only over 25% of the noise range
+
+The root cause is in `process_base`:
+
+  use_denoise_start = not txt2img and p.refiner_start > 0 and p.refiner_start < 1
+
+This flag is later used to populate both `denoising_start` and `denoising_end`,
+and it does not distinguish the detailer pass (which sets `'detailer' in p.ops`
+via `modules/postprocess/yolo.py:409`) from the refine pass.
+
+The fix excludes the detailer pass from `use_denoise_start`, letting the
+diffusers pipeline fall back to the standard `strength`-driven schedule that
+detailer semantically expects.
+
+Side effect: the detailer's step count also normalizes. Previously the
+downstream `calculate_base_steps()` inflated `num_inference_steps` by
+`p.steps // (1 - p.refiner_start)` (e.g. 20 UI steps -> 80 schedule steps ->
+32 actual steps at the partial range). After the patch it runs the
+UI-configured step count directly.
+
+Verified with fixed seed reproducer: before patch, the `Detailer strength`
+slider had no observable effect between 0.0-1.0 (face always a hybrid).
+After patch, the slider maps linearly to repaint intensity as expected
+(strength=0 -> no change, strength=0.5 -> 50% repaint, strength=1.0 ->
+full face replacement).
+
+Related observation (not addressed in this patch): `modules/postprocess/yolo.py`
+line 371 aliases `detailer_strength` as `denoising_strength` in the args dict
+passed to `processing_class.switch_class()`, which permanently mutates
+`p.denoising_strength` via the post-init setter loop (processing_class.py:880).
+Currently harmless because detailer runs last in the pipeline, but would leak
+between multiple chained detailer models. Worth a follow-up refactor.
+
+---
+
+diff --git a/modules/processing_diffusers.py b/modules/processing_diffusers.py
+index 57eadbfac..a264e249e 100644
+--- a/modules/processing_diffusers.py
++++ b/modules/processing_diffusers.py
+@@ -137,7 +137,7 @@ def process_base(p: processing.StableDiffusionProcessing):
+     jobid = shared.state.begin('Base')
+     txt2img = is_txt2img()
+     use_refiner_start = is_refiner_enabled(p) and (not p.is_hr_pass)
+-    use_denoise_start = not txt2img and p.refiner_start > 0 and p.refiner_start < 1
++    use_denoise_start = not txt2img and p.refiner_start > 0 and p.refiner_start < 1 and 'detailer' not in p.ops
+
+     shared.sd_model = update_pipeline(shared.sd_model, p)
+     update_sampler(p, shared.sd_model)

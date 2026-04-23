@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.1 — 2026-04-23
+
+Added `patches/` infrastructure and the first patch: a one-line fix that
+decouples SD.Next's Detailer pass from the Refiner pass's denoising schedule,
+making `Detailer strength` functional for the first time.
+
+### New
+
+- `patches/detailer-refiner-decouple.patch` — fix for
+  `modules/processing_diffusers.py` where `p.refiner_start` leaked into the
+  detailer pass's `denoising_start`, causing `Detailer strength` to have no
+  observable effect regardless of UI value
+- `tools/apply_patches.py` — applies/reverts patches against the user's
+  SD.Next install with automatic `.orig` backup via `git apply`
+- `docs/08-detailer-refiner-fix.md` — full root-cause analysis, reproducer,
+  and before/after log evidence
+
+### Discovered during
+
+Production use on A770 + SDXL Illust merge + face-yolo8m detailer. Symptom
+was that `Detailer strength` slider was inert: moving it 0.3 -> 0.7 -> 1.0
+produced visually identical output. Root cause traced to
+`processing_diffusers.py:140` where `use_denoise_start` flag was computed
+without checking `p.ops` for the detailer pass.
+
+### Known follow-up
+
+`modules/postprocess/yolo.py:371` + `processing_class.py:880` mutate
+`p.denoising_strength` via `switch_class`'s post-init setter loop. Harmless
+with a single detailer model, would break chained detailers. Flagged in
+patch header, not fixed here.
+
+### Upstream
+
+Candidate for PR submission to vladmandic/sdnext. Patch directory will be
+pruned as patches get merged upstream.
+
 ## v1.0 — 2026-04-23
 
 Initial public release. Stable configuration distilled from one year of

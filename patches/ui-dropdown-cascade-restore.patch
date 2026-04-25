@@ -1,0 +1,82 @@
+From: Seth Chou <scss1199@gmail.com>
+Subject: [PATCH] fix(ui): restore cascading dropdown choices across restart
+Target: SD.Next commit 0eb4a98e0 (2026-04-04) or later
+Files: modules/video_models/video_ui.py
+       modules/ui_control_elements.py
+
+Two `gr.Dropdown` widgets in SD.Next initialise their `choices=` to a
+placeholder list and rely on a sibling dropdown's `change` event to
+populate the real choices at runtime:
+
+  1. modules/video_models/video_ui.py
+       Video tab "Video model" dropdown (`elem_id=video_model`)
+       choices=[''], populated by `engine.change(fn=engine_change, ...)`
+
+  2. modules/ui_control_elements.py
+       Control tab per-unit "CN Mode" dropdown
+       (`elem_id=control_unit-{i}-mode`)
+       choices=['default'], populated by
+       `model_id.change(fn=control_choices, ...)`
+
+Both dropdowns have an `elem_id` and are persisted by SD.Next's
+`ui_loadsave` to ui-config.json across restarts. On startup, ui_loadsave
+restores the saved value of the *upstream* dropdown (engine / model_id)
+via Gradio's silent value-set path — which **does NOT fire the change
+event**. The downstream dropdown's `choices` therefore stays at the
+placeholder, and any saved value the user picked previously appears as
+"None" / "default" until they manually toggle the upstream dropdown.
+
+User-visible symptoms:
+
+- Video tab: every restart resets "Video model" to None even though the
+  engine ("LTX Video", "FramePack", etc.) is correctly restored. User
+  must re-select the model and reload weights every session.
+
+- Control tab: when using a union/promax ControlNet (e.g. `Xinsir Union
+  XL`, `Xinsir ProMax XL`, `InstantX Union F1`, `Shakker-Labs Union F1`),
+  the CN Mode the user picked (e.g. `balanced`, `openpose`) silently
+  reverts to `default` after restart, changing inference behaviour with
+  no UI indication.
+
+Fix: pre-populate each downstream dropdown's `choices=` with the union of
+all possible values it could ever take, so that the saved-value restore
+succeeds even before any change event fires. The change handler still
+narrows the list correctly when the user actually toggles the upstream
+dropdown at runtime.
+
+Discovered: 2026-04-25 on Intel Arc A770 16GB. Video model symptom hit
+during LTX I2V setup; CN Mode symptom found by code-review of all
+gr.Dropdown sites in modules/ for the same anti-pattern.
+
+---
+diff --git a/modules/ui_control_elements.py b/modules/ui_control_elements.py
+index 6c207087a..03c8695f2 100644
+--- a/modules/ui_control_elements.py
++++ b/modules/ui_control_elements.py
+@@ -37,7 +37,9 @@ def create_ui_elements(units, result_txt, preview_process):
+                             process_id = gr.Dropdown(label="Processor", choices=processors.list_models(), value='None', elem_id=f'control_unit-{i}-process_name')
+                             model_id = gr.Dropdown(label="ControlNet", choices=controlnet.list_models(), value='None', elem_id=f'control_unit-{i}-model_name')
+                             ui_common.create_refresh_button(model_id, controlnet.list_models, lambda: {"choices": controlnet.list_models(refresh=True)}, f'controlnet_models_{i}_refresh')
+-                            control_mode = gr.Dropdown(label="CN Mode", choices=['default'], value='default', visible=False, elem_id=f'control_unit-{i}-mode')
++                            # Initial choices include the union of all union/promax CN modes so ui_loadsave can restore the saved selection on restart.
++                            # model_id.change() narrows the list when user actually picks a CN model.
++                            control_mode = gr.Dropdown(label="CN Mode", choices=['default', 'canny', 'tile', 'depth', 'blur', 'pose', 'gray', 'lq', 'openpose', 'scribble', 'normal', 'segment', 'repaint'], value='default', visible=False, elem_id=f'control_unit-{i}-mode')
+                             model_strength = gr.Slider(label="CN Strength", minimum=0.01, maximum=2.0, step=0.01, value=1.0, elem_id=f'control_unit-{i}-strength')
+                             control_start = gr.Slider(label="CN Start", minimum=0.0, maximum=1.0, step=0.05, value=0, elem_id=f'control_unit-{i}-start')
+                             control_end = gr.Slider(label="CN End", minimum=0.0, maximum=1.0, step=0.05, value=1.0, elem_id=f'control_unit-{i}-end')
+diff --git a/modules/video_models/video_ui.py b/modules/video_models/video_ui.py
+index 4614e306e..c0e7ffbb5 100644
+--- a/modules/video_models/video_ui.py
++++ b/modules/video_models/video_ui.py
+@@ -128,7 +128,10 @@ def create_ui(prompt, negative, styles, overrides, init_image, init_strength, la
+                 generate = gr.Button('Generate', elem_id="video_generate_btn", variant='primary', visible=False)
+             with gr.Row():
+                 engine = gr.Dropdown(label='Video engine', choices=list(models_def.models), value='None', elem_id="video_engine")
+-                model = gr.Dropdown(label='Video model', choices=[''], value='None', elem_id="video_model")
++                # Initial choices include all models across all engines so ui_loadsave can restore the saved selection on restart.
++                # engine.change() narrows the list when user actually switches engines.
++                _all_video_models = ['None'] + [m.name for engine_models in models_def.models.values() for m in engine_models]
++                model = gr.Dropdown(label='Video model', choices=_all_video_models, value='None', elem_id="video_model")
+                 btn_load = ToolButton(ui_symbols.loading, elem_id="video_model_load")
+             with gr.Row():
+                 url = gr.HTML(label='Model URL', elem_id='video_model_url', value='<br><br>')

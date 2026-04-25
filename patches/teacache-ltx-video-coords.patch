@@ -1,0 +1,57 @@
+From: Seth Chou <scss1199@gmail.com>
+Subject: [PATCH] fix(teacache): accept video_coords kwarg in teacache_ltx_forward
+Target: SD.Next commit 0eb4a98e0 (2026-04-04) or later
+File: modules/teacache/teacache_ltx.py
+
+`modules/teacache/teacache_ltx.py::teacache_ltx_forward` is monkey-patched
+onto `LTXVideoTransformer3DModel.forward` at video model load time (see
+`modules/video_models/video_cache.py:apply_teacache_patch`). Its signature
+was written against an older diffusers `LTXVideoTransformer3DModel.forward`
+and missed the `video_coords` keyword argument that diffusers now passes
+when running `LTXConditionPipeline` in image-conditioning (I2V) mode.
+
+Symptom: with `Settings -> Transformers cache enabled` ON, every LTX I2V
+generation crashes at the first transformer step:
+
+    TypeError: teacache_ltx_forward() got an unexpected keyword argument
+    'video_coords'
+
+Reproducer:
+- Tab "Video", Engine "LTX Video", Model "LTXVideo 0.9.6 2B I2V"
+- Settings -> teacache_enabled = True (default for LTX in many configs)
+- Provide an init image and click Generate
+
+Fix: accept `video_coords` and forward it to `self.rope(...)`. Diffusers'
+`LTXVideoRotaryPosEmbed` already handles the `(rope_interpolation_scale,
+video_coords)` pair correctly — `video_coords is not None` selects the
+image-conditioning branch.
+
+Workaround without this patch: disable Transformers cache (Settings ->
+teacache_enabled = False) and restart SD.Next so the monkey-patch is
+re-evaluated against the new opts.
+
+Discovered: 2026-04-25 on Intel Arc A770 16GB + LTX-Video 0.9.6 2B I2V,
+locally-cached weights (Lightricks/LTX-Video repo).
+
+---
+diff --git a/modules/teacache/teacache_ltx.py b/modules/teacache/teacache_ltx.py
+index 23d4897c0..16e510ede 100644
+--- a/modules/teacache/teacache_ltx.py
++++ b/modules/teacache/teacache_ltx.py
+@@ -18,6 +18,7 @@ def teacache_ltx_forward(
+         height: int,
+         width: int,
+         rope_interpolation_scale: Optional[Tuple[float, float, float]] = None,
++        video_coords: Optional[torch.Tensor] = None,
+         attention_kwargs: Optional[Dict[str, Any]] = None,
+         return_dict: bool = True,
+     ) -> torch.Tensor:
+@@ -36,7 +37,7 @@ def teacache_ltx_forward(
+                 "Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
+             )
+
+-    image_rotary_emb = self.rope(hidden_states, num_frames, height, width, rope_interpolation_scale)
++    image_rotary_emb = self.rope(hidden_states, num_frames, height, width, rope_interpolation_scale, video_coords)
+
+     # convert encoder_attention_mask to a bias the same way we do for attention_mask
+     if encoder_attention_mask is not None and encoder_attention_mask.ndim == 2:

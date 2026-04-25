@@ -1,5 +1,58 @@
 # Changelog
 
+## v1.3 — 2026-04-25
+
+Two patches discovered while bringing up LTX-Video 0.9.6 2B I2V on A770.
+Plus a sweep through SD.Next's modules/ for the same UI anti-pattern that
+caused the Video model dropdown to silently lose its restored value across
+restarts — found one matching case in the Control tab.
+
+### New
+
+- `patches/teacache-ltx-video-coords.patch` — fixes
+  `TypeError: teacache_ltx_forward() got an unexpected keyword argument
+  'video_coords'` crash on every LTX I2V generation when SD.Next's
+  Transformers cache (teacache) is enabled. Root cause: SD.Next's
+  monkey-patched `teacache_ltx_forward` predates diffusers' addition of
+  the `video_coords` kwarg used in image-conditioning mode. Fix accepts
+  the kwarg and forwards it to `self.rope(...)`.
+
+- `patches/ui-dropdown-cascade-restore.patch` — fixes two `gr.Dropdown`
+  widgets whose `choices=` are populated only by a sibling dropdown's
+  change event, but whose values are persisted by `ui_loadsave` to
+  ui-config.json. Gradio's silent value-set on restart bypasses the
+  change handler, leaving the dropdowns stuck on their placeholder
+  choices and silently dropping the restored value:
+    - **Video tab** "Video model" — every restart resets to None even
+      though the engine is correctly restored.
+    - **Control tab** per-unit "CN Mode" — when using a union/promax
+      ControlNet, saved mode (e.g. `balanced`, `openpose`) silently
+      reverts to `default`.
+  Fix pre-populates each downstream dropdown's `choices=` with the union
+  of all possible values so that ui_loadsave's restore succeeds without
+  needing the change event.
+
+### Discovered during
+
+LTX-Video 0.9.6 2B I2V bring-up on A770 + locally-cached weights from
+the `Lightricks/LTX-Video` HuggingFace repo. Teacache crash hit on first
+generation attempt; UI dropdown bug hit on first restart with LTX
+selected. Code-review of all `gr.Dropdown` sites in `modules/` surfaced
+the matching ControlNet case.
+
+### Validated
+
+- LTX I2V 17 frames @ 576×1024 @ 60fps generation succeeds end-to-end
+  with both patches applied (teacache disabled OR enabled — patch makes
+  enabled path work).
+- Peak VRAM 14.75 GB, 0 OOM, 0 retries on A770 16GB.
+- ~6 min for first frame (model load 60s + transformer 250s + VAE
+  decode + mp4 encode), ~5 min/video subsequent (model stays loaded).
+
+### Upstream
+
+Both patches are candidates for PR submission to vladmandic/sdnext.
+
 ## v1.2 — 2026-04-23
 
 Two reference docs distilled from a private SD.Next settings spreadsheet the

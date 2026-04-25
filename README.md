@@ -73,6 +73,8 @@ Current patches:
 | Patch | Target | Summary |
 |---|---|---|
 | `detailer-refiner-decouple.patch` | `modules/processing_diffusers.py` | Makes `Detailer strength` actually work by stopping it from inheriting `Refiner start`. See [doc 08](docs/08-detailer-refiner-fix.md). |
+| `teacache-ltx-video-coords.patch` | `modules/teacache/teacache_ltx.py` | Fixes `TypeError: teacache_ltx_forward() got an unexpected keyword argument 'video_coords'` crash on every LTX I2V generation when teacache is enabled. |
+| `ui-dropdown-cascade-restore.patch` | `modules/video_models/video_ui.py`, `modules/ui_control_elements.py` | Restores Video model + ControlNet CN Mode dropdowns across SD.Next restart (silent value-set bypassed the change handler that populated their choices). |
 
 ## Key findings in one page
 
